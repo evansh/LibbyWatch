@@ -2,6 +2,15 @@
 
 The executable backlog is maintained as GitHub issues. This document records sequencing and exit criteria.
 
+## GitHub views
+
+- [All open backlog issues](https://github.com/evansh/LibbyWatch/issues?q=is%3Aissue%20state%3Aopen)
+- [Milestones](https://github.com/evansh/LibbyWatch/milestones)
+- [P0 critical path](https://github.com/evansh/LibbyWatch/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22priority%3AP0%22)
+- [Externally blocked work](https://github.com/evansh/LibbyWatch/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22blocked%3Aexternal%22)
+
+Primary gates: [native playback approval #3](https://github.com/evansh/LibbyWatch/issues/3), [API access #6](https://github.com/evansh/LibbyWatch/issues/6), [approved playback/DRM adapter #22](https://github.com/evansh/LibbyWatch/issues/22), and [production approval #33](https://github.com/evansh/LibbyWatch/issues/33).
+
 ## Milestone 0 — Feasibility and access
 
 Exit: OverDrive accepts the use case in principle, the native playback/DRM path is known, a pilot library and legal applicant are identified, and integration credentials are requested or received.
