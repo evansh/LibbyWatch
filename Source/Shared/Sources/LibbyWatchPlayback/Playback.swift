@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import LibbyWatchModels
+import LibbyWatchNetworking
 
 public protocol AudiobookPlayer: Sendable {
     var currentBook: Book? { get }
@@ -21,21 +22,21 @@ public protocol AudiobookPlayer: Sendable {
     func stop() async throws
 }
 
-public enum PlaybackState: String, Sendable {
+public enum PlaybackState: Sendable, Equatable {
     case idle
     case loading
     case playing
     case paused
     case buffering
     case finished
-    case failed(Error)
+    case failed(String)
     
     public static func == (lhs: PlaybackState, rhs: PlaybackState) -> Bool {
         switch (lhs, rhs) {
         case (.idle, .idle), (.loading, .loading), (.playing, .playing), (.paused, .paused), (.buffering, .buffering), (.finished, .finished):
             return true
         case (.failed(let lhsError), .failed(let rhsError)):
-            return lhsError.localizedDescription == rhsError.localizedDescription
+            return lhsError == rhsError
         default:
             return false
         }
@@ -58,7 +59,7 @@ public struct Chapter: Codable, Sendable, Hashable {
     }
 }
 
-public struct AudiobookManifest: Codable, Sendable {
+public struct AudiobookManifest: Codable, Sendable, Hashable {
     public let bookId: String
     public let chapters: [Chapter]
     public let totalDuration: TimeInterval
@@ -210,6 +211,7 @@ public actor PlaybackSessionManager {
         }
     }
     
+    #if os(iOS) || os(watchOS) || os(tvOS)
     public func handleInterruption(_ interruption: AVAudioSession.InterruptionType) async {
         switch interruption {
         case .began:
@@ -229,6 +231,7 @@ public actor PlaybackSessionManager {
             break
         }
     }
+#endif
 }
 
 public struct PlaybackSession: Sendable {

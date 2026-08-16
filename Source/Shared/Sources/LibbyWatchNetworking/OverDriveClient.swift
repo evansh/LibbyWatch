@@ -62,7 +62,7 @@ public final class OverDriveClient: OverDriveAPIClient, @unchecked Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(["titleId": bookId])
         
-        return try await performRequest(request: request, patronToken: patronToken)
+        return try await performRequest(request: request, patronToken: patronToken, expectData: true)
     }
     
     public func placeHold(bookId: String, patronToken: String) async throws -> Hold {
@@ -72,21 +72,21 @@ public final class OverDriveClient: OverDriveAPIClient, @unchecked Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(["titleId": bookId])
         
-        return try await performRequest(request: request, patronToken: patronToken)
+        return try await performRequest(request: request, patronToken: patronToken, expectData: true)
     }
     
     public func returnLoan(loanId: String, patronToken: String) async throws {
         let url = configuration.baseURL.appendingPathComponent("v2/patron/loans/\(loanId)/return")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        try await performRequest(request: request, patronToken: patronToken, expectData: false)
+        try await performRequestVoid(request: request, patronToken: patronToken)
     }
     
     public func cancelHold(holdId: String, patronToken: String) async throws {
         let url = configuration.baseURL.appendingPathComponent("v2/patron/holds/\(holdId)")
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
-        try await performRequest(request: request, patronToken: patronToken, expectData: false)
+        try await performRequestVoid(request: request, patronToken: patronToken)
     }
     
     public func getFulfillment(loanId: String, patronToken: String) async throws -> Fulfillment {
@@ -143,6 +143,38 @@ public final class OverDriveClient: OverDriveAPIClient, @unchecked Sendable {
                 throw APIError.serverError
             default:
                 throw APIError.httpError(statusCode: httpResponse.statusCode, data: data)
+            }
+        } catch let error as APIError {
+            throw error
+        } catch {
+            throw APIError.networkError(error)
+        }
+    }
+    
+    private func performRequestVoid(request: URLRequest, patronToken: String?) async throws {
+        do {
+            let (_, response) = try await session.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.invalidResponse
+            }
+            
+            switch httpResponse.statusCode {
+            case 200..<300:
+                return
+            case 401:
+                throw APIError.unauthorized
+            case 403:
+                throw APIError.forbidden
+            case 404:
+                throw APIError.notFound
+            case 429:
+                let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+                throw APIError.rateLimited(retryAfter: retryAfter)
+            case 500..<600:
+                throw APIError.serverError
+            default:
+                throw APIError.httpError(statusCode: httpResponse.statusCode, data: nil)
             }
         } catch let error as APIError {
             throw error

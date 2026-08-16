@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import LibbyWatchModels
+import LibbyWatchNetworking
 
 public final class MockAudiobookPlayer: AudiobookPlayer, @unchecked Sendable {
     public private(set) var currentBook: Book?
@@ -176,7 +177,7 @@ public final class MockOfflineStorage: OfflineStorage, @unchecked Sendable {
         let bookPath = documentsURL.appendingPathComponent("Audiobooks/\(manifest.bookId)", isDirectory: true)
         try FileManager.default.createDirectory(at: bookPath, withIntermediateDirectories: true)
         
-        let offline = OfflineAudiobook(
+        var offline = OfflineAudiobook(
             bookId: manifest.bookId,
             manifest: manifest,
             localPath: bookPath.path,
@@ -216,12 +217,11 @@ public final class MockOfflineStorage: OfflineStorage, @unchecked Sendable {
         var size: Int64 = 0
         for offline in downloaded {
             let url = URL(fileURLWithPath: offline.localPath)
-            if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey]) {
-                for case let fileURL as URL in enumerator {
-                    if let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey]),
-                       let fileSize = resourceValues.fileSize {
-                        size += Int64(fileSize)
-                    }
+            let contents = try FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: [.fileSizeKey])
+            for fileURL in contents {
+                if let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey]),
+                   let fileSize = resourceValues.fileSize {
+                    size += Int64(fileSize)
                 }
             }
         }

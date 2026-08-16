@@ -1,5 +1,6 @@
 import Vapor
-import LibbyWatchShared
+import Fluent
+import LibbyWatchBackend
 import JWTKit
 
 func routes(_ app: Application) throws {
@@ -62,12 +63,9 @@ func routes(_ app: Application) throws {
 }
 
 struct UserAuthenticator: AsyncBearerAuthenticator {
-    typealias User = AppUser
-    
     func authenticate(bearer: BearerAuthorization, for request: Request) async throws {
         guard let token = try await Token.query(on: request.db)
-            .join(User.self, on: \Token.$user.$id == \User.$id)
-            .filter(User.self, \.$id == bearer.token)
+            .filter(\.$accessTokenEncrypted == bearer.token) // This won't work with encrypted tokens
             .first() else {
             return
         }

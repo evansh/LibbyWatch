@@ -3,6 +3,7 @@ import Crypto
 import X509
 import JWTKit
 import LibbyWatchModels
+import LibbyWatchNetworking
 
 public struct QRCodeAuthRequest: Codable, Sendable {
     public let clientId: String
@@ -49,7 +50,7 @@ public struct TokenResponse: Codable, Sendable {
     }
 }
 
-public struct TokenPair: Sendable {
+public struct TokenPair: Codable, Sendable {
     public let accessToken: String
     public let refreshToken: String
     public let expiresAt: Date

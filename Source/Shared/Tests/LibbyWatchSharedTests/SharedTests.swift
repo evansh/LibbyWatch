@@ -199,7 +199,7 @@ final class PlaybackTests: XCTestCase {
         let library = Library(
             id: "nypl", name: "NYPL", shortName: "NYPL",
             websiteURL: URL(string: "https://nypl.org")!,
-            overdriveURL: URL(string:// "https://nypl.overdrive.com")!,
+            overdriveURL: URL(string: "https://nypl.overdrive.com")!,
             isAdvantage: false
         )
         

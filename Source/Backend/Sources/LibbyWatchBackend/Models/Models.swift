@@ -3,7 +3,7 @@ import Fluent
 import Foundation
 import LibbyWatchShared
 
-final class User: Model, @unchecked Sendable {
+final class User: Model, @unchecked Sendable, Authenticatable {
     static let schema = "users"
     
     @ID(key: .id)

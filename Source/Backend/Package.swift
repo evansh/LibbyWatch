@@ -20,7 +20,7 @@ let package = Package(
         .package(path: "../Shared"),
     ],
     targets: [
-        .executableTarget(
+        .target(
             name: "App",
             dependencies: [
                 .product(name: "Vapor", package: "vapor"),
@@ -29,7 +29,7 @@ let package = Package(
                 .product(name: "JWTKit", package: "jwt-kit"),
                 .product(name: "Crypto", package: "swift-crypto"),
                 "LibbyWatchBackend",
-                "LibbyWatchShared",
+                .product(name: "LibbyWatchShared", package: "Shared"),
             ],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency"),
@@ -43,7 +43,7 @@ let package = Package(
                 .product(name: "FluentSQLiteDriver", package: "fluent-sqlite-driver"),
                 .product(name: "JWTKit", package: "jwt-kit"),
                 .product(name: "Crypto", package: "swift-crypto"),
-                "LibbyWatchShared",
+                .product(name: "LibbyWatchShared", package: "Shared"),
             ]
         ),
         .testTarget(
@@ -51,7 +51,7 @@ let package = Package(
             dependencies: [
                 .product(name: "XCTVapor", package: "vapor"),
                 "LibbyWatchBackend",
-                "LibbyWatchShared",
+                .product(name: "LibbyWatchShared", package: "Shared"),
             ]
         ),
     ]
