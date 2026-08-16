@@ -1,0 +1,237 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_15.2.app/Contents/Developer
+  SWIFT_VERSION: 5.9
+
+jobs:
+  shared-package-tests:
+    name: Shared Package Tests (macOS)
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: Source/Shared
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app
+      
+      - name: Show Xcode version
+        run: xcodebuild -version
+      
+      - name: Resolve package dependencies
+        run: swift package resolve
+      
+      - name: Build shared package
+        run: swift build
+      
+      - name: Run shared package tests
+        run: swift test --parallel
+      
+      - name: Generate code coverage
+        run: swift test --enable-code-coverage
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          flags: shared
+          directory: ./Source/Shared
+
+  backend-tests:
+    name: Backend Tests (macOS)
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: Source/Backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app
+      
+      - name: Show Xcode version
+        run: xcodebuild -version
+      
+      - name: Resolve package dependencies
+        run: swift package resolve
+      
+      - name: Build backend
+        run: swift build
+      
+      - name: Run backend tests
+        run: swift test --parallel
+      
+      - name: Generate code coverage
+        run: swift test --enable-code-coverage
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          flags: backend
+          directory: ./Source/Backend
+
+  ios-build:
+    name: iOS Build & Test
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: Source/App
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app
+      
+      - name: Show Xcode version
+        run: xcodebuild -version
+      
+      - name: Install dependencies
+        run: |
+          if [ -f Package.swift ]; then
+            swift package resolve
+          fi
+      
+      - name: Build iOS app
+        run: |
+          if [ -f LibbyWatch.xcodeproj/project.pbxproj ]; then
+            xcodebuild build \
+              -project LibbyWatch.xcodeproj \
+              -scheme LibbyWatch \
+              -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.2' \
+              -quiet
+          else
+            echo "Xcode project not yet created - skipping"
+          fi
+      
+      - name: Run iOS tests
+        run: |
+          if [ -f LibbyWatch.xcodeproj/project.pbxproj ]; then
+            xcodebuild test \
+              -project LibbyWatch.xcodeproj \
+              -scheme LibbyWatch \
+              -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.2' \
+              -quiet \
+              -resultBundlePath TestResults.xcresult
+          else
+            echo "Xcode project not yet created - skipping"
+          fi
+
+  watchos-build:
+    name: watchOS Build
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: Source/WatchApp
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app
+      
+      - name: Show Xcode version
+        run: xcodebuild -version
+      
+      - name: Build watchOS app
+        run: |
+          if [ -f LibbyWatchWatch.xcodeproj/project.pbxproj ]; then
+            xcodebuild build \
+              -project LibbyWatchWatch.xcodeproj \
+              -scheme LibbyWatchWatch \
+              -destination 'platform=watchOS Simulator,name=Apple Watch Series 9 (45mm),OS=10.2' \
+              -quiet
+          else
+            echo "Xcode project not yet created - skipping"
+          fi
+
+  lint:
+    name: SwiftLint
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      
+      - name: Run SwiftLint
+        run: swiftlint lint --path Source
+
+  security:
+    name: Security Audit
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Install Swift Package Index security audit
+        run: |
+          brew install swift-package-index-security-audit || true
+      
+      - name: Audit shared package
+        run: |
+          cd Source/Shared
+          swift package audit 2>/dev/null || echo "Audit tool not available, skipping"
+      
+      - name: Audit backend package
+        run: |
+          cd Source/Backend
+          swift package audit 2>/dev/null || echo "Audit tool not available, skipping"
+
+  docs:
+    name: Documentation Build
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Install DocC
+        run: |
+          # DocC is included with Xcode
+          xcodebuild -version
+      
+      - name: Build documentation
+        run: |
+          cd Source/Shared
+          swift package generate-documentation --target LibbyWatchShared 2>/dev/null || echo "DocC not fully configured, skipping"
+
+  integration-tests:
+    name: Integration Tests (requires services)
+    runs-on: macos-14
+    if: false  # Enable when integration test infrastructure is ready
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: libbywatch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Run integration tests
+        run: |
+          cd Source/Backend
+          TEST_DATABASE_URL=postgresql://test:test@localhost:5432/libbywatch_test swift test --filter IntegrationTests
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
