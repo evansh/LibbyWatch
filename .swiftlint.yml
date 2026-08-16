@@ -1,0 +1,75 @@
+disabled_rules:
+  - trailing_whitespace
+  - line_length
+  - file_length
+  - type_body_length
+  - function_body_length
+  - cyclomatic_complexity
+  - nesting
+  - large_tuple
+  - function_parameter_count
+  - todo
+  - vertical_parameter_alignment
+
+opt_in_rules:
+  - empty_count
+  - missing_docs
+  - force_unwrapping
+  - explicit_init
+  - overridden_super_call
+  - prohibited_super_call
+  - unowned_variable_capture
+  - closure_spacing
+  - explicit_acl
+  - explicit_type_interface
+  - first_where
+  - last_where
+  - redundant_nil_coalescing
+  - redundant_void_return
+  - sorted_imports
+  - switch_case_alignment
+  - empty_string
+  - explicit_self
+  - closure_end_indentation
+  - multiline_parameters
+  - multiline_arguments
+  - operator_usage_whitespace
+
+excluded:
+  - .build
+  - .swiftpm
+  - Tests
+  - DerivedData
+  - Pods
+  - Carthage
+  - .xcodeproj
+  - .xcworkspace
+  - Source/Shared/.build
+  - Source/Backend/.build
+  - Source/App/.build
+  - Source/WatchApp/.build
+
+included:
+  - Source
+
+line_length:
+  warning: 160
+  error: 200
+
+type_body_length:
+  warning: 300
+  error: 400
+
+file_length:
+  warning: 500
+  error: 1000
+
+function_body_length:
+  warning: 60
+  error: 100
+
+cyclomatic_complexity:
+  warning: 15
+  error: 25
+
+reporter: "xcode"
