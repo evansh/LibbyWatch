@@ -27,6 +27,7 @@ struct CreateUser: AsyncMigration {
             .field("name", .string, .required)
             .field("email", .string)
             .field("library_card_number", .string, .required)
+            .field("access_token_hash", .string)
             .field("created_at", .datetime, .required)
             .field("updated_at", .datetime, .required)
             .unique(on: "patron_id")

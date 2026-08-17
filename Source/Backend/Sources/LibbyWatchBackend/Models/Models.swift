@@ -27,6 +27,9 @@ final class User: Model, @unchecked Sendable, Authenticatable {
     @Timestamp(key: "updated_at", on: .update)
     var updatedAt: Date?
     
+    @Field(key: "access_token_hash")
+    var accessTokenHash: String?
+    
     @Children(for: \.$user)
     var tokens: [Token]
     
@@ -35,12 +38,13 @@ final class User: Model, @unchecked Sendable, Authenticatable {
     
     init() {}
     
-    init(id: UUID? = nil, patronId: String, name: String, email: String? = nil, libraryCardNumber: String) {
+    init(id: UUID? = nil, patronId: String, name: String, email: String? = nil, libraryCardNumber: String, accessTokenHash: String? = nil) {
         self.id = id
         self.patronId = patronId
         self.name = name
         self.email = email
         self.libraryCardNumber = libraryCardNumber
+        self.accessTokenHash = accessTokenHash
     }
 }
 

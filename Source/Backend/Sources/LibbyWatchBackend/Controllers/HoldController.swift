@@ -91,13 +91,10 @@ struct HoldController {
         }
         
         if token.expiresAt < Date() {
-            let decrypted = try req.application.crypto.decrypt(token.refreshTokenEncrypted)
-            let refreshToken = String(data: decrypted, encoding: .utf8)!
+            let newTokenPair = try await req.qrAuthenticator.refreshAccessToken(patronId: user.patronId)
             
-            let newTokenPair = try await req.overdriveClient.refreshAccessToken(refreshToken: refreshToken)
-            
-            let accessEncrypted = try req.application.crypto.encrypt(newTokenPair.accessToken.data(using: .utf8)!)
-            let refreshEncrypted = try req.application.crypto.encrypt(newTokenPair.refreshToken.data(using: .utf8)!)
+            let accessEncrypted = try req.crypto.encrypt(newTokenPair.accessToken.data(using: .utf8)!)
+            let refreshEncrypted = try req.crypto.encrypt(newTokenPair.refreshToken.data(using: .utf8)!)
             
             try await Token.query(on: req.db)
                 .filter(\.$user.$id == user.id!)
@@ -109,7 +106,7 @@ struct HoldController {
             return newTokenPair.accessToken
         }
         
-        let decrypted = try req.application.crypto.decrypt(token.accessTokenEncrypted)
+        let decrypted = try req.crypto.decrypt(token.accessTokenEncrypted)
         return String(data: decrypted, encoding: .utf8)!
     }
 }

@@ -7,8 +7,8 @@ import LibbyWatchShared
 struct AuthController {
     static func initiateQR(req: Request) async throws -> QRInitResponse {
         let qrAuth = QRCodeAuthRequest(
-            clientId: req.application.overdriveConfig.clientId,
-            redirectURL: req.application.overdriveConfig.redirectURL,
+            clientId: req.overdriveConfig.clientId,
+            redirectURL: req.overdriveConfig.redirectURL,
             scope: "profile loans holds",
             state: UUID().uuidString
         )
@@ -35,7 +35,7 @@ struct AuthController {
         
         let callback = try req.content.decode(CallbackRequest.self)
         
-        let tokenPair = try await req.overdriveClient.exchangeCodeForToken(code: callback.code, redirectURL: req.application.overdriveConfig.redirectURL)
+        let tokenPair = try await req.qrAuthenticator.exchangeCodeForToken(code: callback.code, redirectURL: req.overdriveConfig.redirectURL)
         
         let user = try await findOrCreateUser(patronId: tokenPair.patronId ?? UUID().uuidString, req: req)
         try await storeTokens(user: user, tokenPair: tokenPair, req: req)
@@ -62,10 +62,7 @@ struct AuthController {
             throw Abort(.unauthorized, reason: "No token found")
         }
         
-        let decrypted = try req.application.crypto.decrypt(token.refreshTokenEncrypted)
-        let refreshToken = String(data: decrypted, encoding: .utf8)!
-        
-        let newTokenPair = try await req.overdriveClient.refreshAccessToken(refreshToken: refreshToken)
+        let newTokenPair = try await req.qrAuthenticator.refreshAccessToken(patronId: user.patronId)
         try await updateTokens(user: user, tokenPair: newTokenPair, req: req)
         
         let jwt = try await generateJWT(for: user, req: req)
@@ -79,6 +76,9 @@ struct AuthController {
         try await Token.query(on: req.db)
             .filter(\.$user.$id == user.id!)
             .delete()
+        
+        user.accessTokenHash = nil
+        try await user.save(on: req.db)
         
         try await AuditLog(
             userId: user.id,
@@ -103,8 +103,8 @@ struct AuthController {
     }
     
     private static func storeTokens(user: User, tokenPair: TokenPair, req: Request) async throws {
-        let accessEncrypted = try req.application.crypto.encrypt(tokenPair.accessToken.data(using: .utf8)!)
-        let refreshEncrypted = try req.application.crypto.encrypt(tokenPair.refreshToken.data(using: .utf8)!)
+        let accessEncrypted = try req.crypto.encrypt(tokenPair.accessToken.data(using: .utf8)!)
+        let refreshEncrypted = try req.crypto.encrypt(tokenPair.refreshToken.data(using: .utf8)!)
         
         let token = Token(
             userId: user.id!,
@@ -113,11 +113,14 @@ struct AuthController {
             expiresAt: tokenPair.expiresAt
         )
         try await token.save(on: req.db)
+        
+        user.accessTokenHash = hashToken(tokenPair.accessToken)
+        try await user.save(on: req.db)
     }
     
     private static func updateTokens(user: User, tokenPair: TokenPair, req: Request) async throws {
-        let accessEncrypted = try req.application.crypto.encrypt(tokenPair.accessToken.data(using: .utf8)!)
-        let refreshEncrypted = try req.application.crypto.encrypt(tokenPair.refreshToken.data(using: .utf8)!)
+        let accessEncrypted = try req.crypto.encrypt(tokenPair.accessToken.data(using: .utf8)!)
+        let refreshEncrypted = try req.crypto.encrypt(tokenPair.refreshToken.data(using: .utf8)!)
         
         try await Token.query(on: req.db)
             .filter(\.$user.$id == user.id!)
@@ -125,17 +128,44 @@ struct AuthController {
             .set(\.$refreshTokenEncrypted, to: refreshEncrypted)
             .set(\.$expiresAt, to: tokenPair.expiresAt)
             .update()
+        
+        user.accessTokenHash = hashToken(tokenPair.accessToken)
+        try await user.save(on: req.db)
     }
     
     private static func generateJWT(for user: User, req: Request) async throws -> String {
-        let payload = JWTPayload(
+        let payload = LibbyWatchJWTPayload(
             sub: user.id!.uuidString,
             patronId: user.patronId,
             exp: ExpirationClaim(value: Date().addingTimeInterval(3600)),
             iat: IssuedAtClaim(value: Date())
         )
         
-        return try req.application.jwt.signers.sign(payload)
+        let header = ["alg": "HS256", "typ": "JWT"]
+        let headerData = try JSONEncoder().encode(header)
+        let payloadData = try JSONEncoder().encode(payload)
+        
+        let headerB64 = base64URLEncode(headerData)
+        let payloadB64 = base64URLEncode(payloadData)
+        let signingInput = "\(headerB64).\(payloadB64)"
+        
+        let signature = try req.jwtSigner.sign(Data(signingInput.utf8))
+        let signatureB64 = base64URLEncode(Data(signature))
+        
+        return "\(signingInput).\(signatureB64)"
+    }
+    
+    private static func base64URLEncode(_ data: Data) -> String {
+        return data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+    
+    private static func hashToken(_ token: String) -> String {
+        let data = Data(token.utf8)
+        let hash = SHA256.hash(data: data)
+        return Data(hash).base64EncodedString()
     }
 }
 
@@ -156,13 +186,13 @@ struct TokenResponse: Content {
     }
 }
 
-struct JWTPayload: JWTPayload, Authenticatable {
+struct LibbyWatchJWTPayload: JWTPayload, Authenticatable {
     let sub: String
     let patronId: String
     let exp: ExpirationClaim
     let iat: IssuedAtClaim
     
-    func verify(using signer: JWTSigner) throws {
+    func verify(using algorithm: some JWTAlgorithm) async throws {
         try exp.verifyNotExpired()
     }
 }

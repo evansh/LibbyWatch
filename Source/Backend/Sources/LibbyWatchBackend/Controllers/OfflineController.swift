@@ -40,7 +40,7 @@ struct OfflineController {
             expiresAt: fulfillment.expiresAt
         )
         
-        let localPath = req.application.offlineStoragePath.appendingPathComponent("Audiobooks/\(request.bookId)").path
+        let localPath = req.offlineStoragePath.appendingPathComponent("Audiobooks/\(request.bookId)").path
         try FileManager.default.createDirectory(atPath: localPath, withIntermediateDirectories: true)
         
         let manifestData = try JSONEncoder().encode(manifest)
@@ -142,27 +142,39 @@ struct OfflineController {
             
             downloadedChapters.insert(chapter.index)
             
+            do {
+                try await OfflineAudiobook.query(on: req.db)
+                    .filter(\.$id == offline.id!)
+                    .set(\.$downloadedChapters, to: Array(downloadedChapters))
+                    .update()
+            } catch {
+                req.logger.error("Failed to update download progress: \(error)")
+            }
+            
+            do {
+                try await Task.sleep(nanoseconds: 200_000_000)
+            } catch {
+                return
+            }
+        }
+        
+        do {
             try await OfflineAudiobook.query(on: req.db)
                 .filter(\.$id == offline.id!)
+                .set(\.$isComplete, to: true)
                 .set(\.$downloadedChapters, to: Array(downloadedChapters))
                 .update()
             
-            try await Task.sleep(nanoseconds: 200_000_000)
+            try await AuditLog(
+                userId: offline.$user.id,
+                eventType: "download_complete",
+                eventData: JSONValue(["book_id": offline.bookId]),
+                ipAddress: nil,
+                userAgent: nil
+            ).save(on: req.db)
+        } catch {
+            req.logger.error("Failed to complete download: \(error)")
         }
-        
-        try await OfflineAudiobook.query(on: req.db)
-            .filter(\.$id == offline.id!)
-            .set(\.$isComplete, to: true)
-            .set(\.$downloadedChapters, to: Array(downloadedChapters))
-            .update()
-        
-        try await AuditLog(
-            userId: offline.$user.id,
-            eventType: "download_complete",
-            eventData: JSONValue(["book_id": offline.bookId]),
-            ipAddress: nil,
-            userAgent: nil
-        ).save(on: req.db)
     }
     
     private static func getValidAccessToken(user: User, req: Request) async throws -> String {
@@ -175,13 +187,10 @@ struct OfflineController {
         }
         
         if token.expiresAt < Date() {
-            let decrypted = try req.application.crypto.decrypt(token.refreshTokenEncrypted)
-            let refreshToken = String(data: decrypted, encoding: .utf8)!
+            let newTokenPair = try await req.qrAuthenticator.refreshAccessToken(patronId: user.patronId)
             
-            let newTokenPair = try await req.overdriveClient.refreshAccessToken(refreshToken: refreshToken)
-            
-            let accessEncrypted = try req.application.crypto.encrypt(newTokenPair.accessToken.data(using: .utf8)!)
-            let refreshEncrypted = try req.application.crypto.encrypt(newTokenPair.refreshToken.data(using: .utf8)!)
+            let accessEncrypted = try req.crypto.encrypt(newTokenPair.accessToken.data(using: .utf8)!)
+            let refreshEncrypted = try req.crypto.encrypt(newTokenPair.refreshToken.data(using: .utf8)!)
             
             try await Token.query(on: req.db)
                 .filter(\.$user.$id == user.id!)
@@ -193,7 +202,7 @@ struct OfflineController {
             return newTokenPair.accessToken
         }
         
-        let decrypted = try req.application.crypto.decrypt(token.accessTokenEncrypted)
+        let decrypted = try req.crypto.decrypt(token.accessTokenEncrypted)
         return String(data: decrypted, encoding: .utf8)!
     }
 }

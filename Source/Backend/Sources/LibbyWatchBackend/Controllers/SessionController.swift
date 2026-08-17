@@ -92,7 +92,7 @@ struct SessionExportResponse: Content {
 struct SessionEvent: Content {
     let id: String
     let eventType: String
-    let eventData: Any?
+    let eventData: JSONValue?
     let ipAddress: String?
     let userAgent: String?
     let timestamp: Date
@@ -100,14 +100,20 @@ struct SessionEvent: Content {
     init(id: String, eventType: String, eventData: Any?, ipAddress: String?, userAgent: String?, timestamp: Date) {
         self.id = id
         self.eventType = eventType
-        self.eventData = eventData
+        self.eventData = eventData.map { JSONValue($0) }
         self.ipAddress = ipAddress
         self.userAgent = userAgent
         self.timestamp = timestamp
     }
     
-    enum CodingKeys: String, CodingKey {
-        case id, eventType, eventData, ipAddress, userAgent, timestamp
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        eventType = try container.decode(String.self, forKey: .eventType)
+        eventData = try container.decodeIfPresent(JSONValue.self, forKey: .eventData)
+        ipAddress = try container.decodeIfPresent(String.self, forKey: .ipAddress)
+        userAgent = try container.decodeIfPresent(String.self, forKey: .userAgent)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
     }
     
     func encode(to encoder: Encoder) throws {
@@ -118,5 +124,9 @@ struct SessionEvent: Content {
         try container.encodeIfPresent(ipAddress, forKey: .ipAddress)
         try container.encodeIfPresent(userAgent, forKey: .userAgent)
         try container.encode(timestamp, forKey: .timestamp)
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id, eventType, eventData, ipAddress, userAgent, timestamp
     }
 }

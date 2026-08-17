@@ -1,11 +1,11 @@
 import Vapor
 import Fluent
-import LibbyWatchBackend
 import JWTKit
+import LibbyWatchBackend
 
 func routes(_ app: Application) throws {
     app.get("health") { req in
-        return ["status": "ok", "timestamp": Date()]
+        return ["status": "ok", "timestamp": Date().iso8601]
     }
     
     let api = app.grouped("api", "v1")
@@ -64,17 +64,44 @@ func routes(_ app: Application) throws {
 
 struct UserAuthenticator: AsyncBearerAuthenticator {
     func authenticate(bearer: BearerAuthorization, for request: Request) async throws {
-        guard let token = try await Token.query(on: request.db)
-            .filter(\.$accessTokenEncrypted == bearer.token) // This won't work with encrypted tokens
+        let tokenParts = bearer.token.split(separator: ".")
+        guard tokenParts.count == 3,
+              let payloadData = base64URLDecode(String(tokenParts[1])) else {
+            return
+        }
+        
+        var payload = try JSONDecoder().decode(LibbyWatchJWTPayload.self, from: payloadData)
+        try await payload.verify(using: request.jwtSigner)
+        
+        guard let userId = UUID(uuidString: payload.sub),
+              let user = try await User.query(on: request.db)
+            .filter(\.$id == userId)
             .first() else {
             return
         }
         
-        if token.expiresAt < Date() {
+        if user.accessTokenHash != hashToken(bearer.token) {
             return
         }
         
-        request.auth.login(token.user)
+        request.auth.login(user)
+    }
+    
+    private func base64URLDecode(_ string: String) -> Data? {
+        var base64 = string
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let remainder = base64.count % 4
+        if remainder > 0 {
+            base64 += String(repeating: "=", count: 4 - remainder)
+        }
+        return Data(base64Encoded: base64)
+    }
+    
+    private func hashToken(_ token: String) -> String {
+        let data = Data(token.utf8)
+        let hash = SHA256.hash(data: data)
+        return Data(hash).base64EncodedString()
     }
 }
 
